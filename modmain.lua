@@ -1,83 +1,96 @@
-local quick_pick_list = {"sapling", "marsh_bush", "reeds", "grass", "berrybush2", "berrybush", "flower_cave",
-                         "flower_cave_double", "flower_cave_triple", "red_mushroom", "green_mushroom", "blue_mushroom",
-                         "wormlight_plant", "rock_avocado_bush", "bullkelp_plant", "carrat_planted", "sapling_moon"}
+local TheNet = GLOBAL.TheNet
+local TheSim = GLOBAL.TheSim
+local IsServer = TheNet:GetIsServer() or TheNet:IsDedicated()
 
--- Quick Pick Cactus or Lichen
-if GetModConfigData("quick_pick_cactus") then
-    local quick_pick_list2 = {"cactus", "oasis_cactus", "lichen"}
-    for k, v in pairs(quick_pick_list2) do
-        table.insert(quick_pick_list, v)
-    end
+local stack_size = GetModConfigData("STACK_SIZE")
+local Stack_other_objects = GetModConfigData("STACK_OTHER_OBJECTS")
+
+GLOBAL.TUNING.STACK_SIZE_LARGEITEM = stack_size
+GLOBAL.TUNING.STACK_SIZE_MEDITEM = stack_size
+GLOBAL.TUNING.STACK_SIZE_SMALLITEM = stack_size
+GLOBAL.TUNING.STACK_SIZE_TINYITEM = stack_size
+
+
+local mod_stackable_replica = GLOBAL.require("components/stackable_replica")
+mod_stackable_replica._ctor = function(self, inst)
+	self.inst = inst
+	self._stacksize = GLOBAL.net_shortint(inst.GUID, "stackable._stacksize", "stacksizedirty")
+	self._maxsize = GLOBAL.net_shortint(inst.GUID, "stackable._maxsize")
 end
 
--- Quick Pick Wormwood's plant
-if GetModConfigData("quick_pick_plant_normal_ground") then
-    table.insert(quick_pick_list, "plant_normal_ground")
+
+--遍历需要叠加的动物
+local function AddAnimalStackables(value)
+	if IsServer == false then
+		return
+	end
+	for k,v in ipairs(value) do
+		AddPrefabPostInit(v,function(inst)
+			if(inst.components.stackable == nil) then
+				inst:AddComponent("stackable")
+			end
+			inst.components.inventoryitem:SetOnDroppedFn(function(inst)
+				if(inst.components.perishable ~= nil) then
+					inst.components.perishable:StopPerishing()
+				end
+				if(inst.sg ~= nil) then
+					inst.sg:GoToState("stunned")
+				end
+				if inst.components.stackable then
+					while inst.components.stackable:StackSize() > 1 do
+						local item = inst.components.stackable:Get()
+						if item then
+							if item.components.inventoryitem then
+								item.components.inventoryitem:OnDropped()
+							end
+							item.Physics:Teleport(inst.Transform:GetWorldPosition())
+						end
+					end
+				 end
+			end)
+		end)
+	end
 end
 
--- For the mod of Coffee
-if GLOBAL.KnownModIndex:IsModEnabled("workshop-1463489316") then
-    table.insert(quick_pick_list, "coffeebush")
+--遍历需要叠加的物品
+local function AddItemStackables(value)
+	if IsServer == false then
+		return
+	end
+	for k,v in ipairs(value) do
+		AddPrefabPostInit(v,function(inst)
+			if  inst.components.sanity ~= nil  then
+				return
+			end
+			if  inst.components.inventoryitem == nil  then
+				return
+			end
+			if(inst.components.stackable == nil) then
+				inst:AddComponent("stackable")
+			end
+		end)
+	end
 end
 
-for k, v in pairs(quick_pick_list) do
-    AddPrefabPostInit(v, function(inst)
-        if inst.components.pickable then
-            inst.components.pickable.quickpick = true
-        end
-    end)
-end
-
--- Quick pick from cookpots, dryers and farms
-if GetModConfigData("quick_harvest") then
-    AddStategraphPostInit("wilson", function(sg)
-        local actionhandler = GLOBAL.ActionHandler(GLOBAL.ACTIONS.HARVEST, "doshortaction")
-        sg.actionhandlers[GLOBAL.ACTIONS.HARVEST] = actionhandler
-    end)
-end
-
--- Quick cooking on firepit
-if GetModConfigData("quick_cook_on_fire") then
-    AddStategraphPostInit("wilson", function(sg)
-        local actionhandler = GLOBAL.ActionHandler(GLOBAL.ACTIONS.COOK, "doshortaction")
-        sg.actionhandlers[GLOBAL.ACTIONS.COOK] = actionhandler
-    end)
-end
---Moon quay stuff
-if GetModConfigData("quick_pick_moon_quay") then
-    local quick_pick_list2 = {
-        "monkeytail",
-        "bananabush",
-    }
-    for k,v in pairs(quick_pick_list2) do
-        table.insert(quick_pick_list, v)
-    end
-end
-
--- Quick pick when riding on Beefalo
-if GetModConfigData("quick_on_riding") then
-    AddStategraphPostInit("wilson", function(sg)
-        local actionhandler_pick = GLOBAL.ActionHandler(GLOBAL.ACTIONS.PICK, function(inst, action)
-            return (action.target ~= nil and action.target.components.pickable ~= nil and
-                       ((action.target.components.pickable.jostlepick and "dojostleaction") or
-                           (action.target.components.pickable.quickpick and "doshortaction") or
-                           (inst:HasTag("fastpicker") and "doshortaction") or
-                           (inst:HasTag("quagmire_fasthands") and "domediumaction") or "dolongaction")) or nil
-        end)
-        sg.actionhandlers[GLOBAL.ACTIONS.PICK] = actionhandler_pick
-
-        local actionhandler_pickup = GLOBAL.ActionHandler(GLOBAL.ACTIONS.PICKUP, function(inst, action)
-            return (action.target ~= nil and action.target:HasTag("minigameitem") and "dosilentshortaction") or
-                       "doshortaction"
-        end)
-        sg.actionhandlers[GLOBAL.ACTIONS.PICKUP] = actionhandler_pickup
-    end)
-end
-
--- Quick talk when farming
-if GetModConfigData("quick_plant_interact") then
-    AddStategraphPostInit("wilson", function(sg)
-        local actionhandler_pick = GLOBAL.ActionHandler(GLOBAL.ACTIONS.INTERACT_WITH, "doshortaction")
-        sg.actionhandlers[GLOBAL.ACTIONS.INTERACT_WITH] = actionhandler_pick
-    end)
+if Stack_other_objects then 
+	--小兔子
+	AddAnimalStackables({"rabbit",})
+	--鼹鼠
+	AddAnimalStackables({"mole",})
+	--鸟类
+	AddAnimalStackables({"robin","robin_winter","crow","puffin","canary","canary_poisoned",})
+	--鱼类
+	--,"oceanfish_medium_1_inv","oceanfish_medium_2_inv","oceanfish_medium_3_inv","oceanfish_medium_4_inv","oceanfish_medium_5_inv","oceanfish_medium_6_inv","oceanfish_medium_7_inv","oceanfish_medium_8_inv","oceanfish_small_1_inv","oceanfish_small_2_inv","oceanfish_small_3_inv","oceanfish_small_4_inv","oceanfish_small_5_inv","oceanfish_small_6_inv","oceanfish_small_7_inv","oceanfish_small_8_inv","oceanfish_small_9_inv","wobster_sheller_land","wobster_moonglass_land"
+	local STACKABLE_OBJECTS_BASE = {"pondfish","pondeel"}
+	AddAnimalStackables(STACKABLE_OBJECTS_BASE)
+	--眼球炮塔
+	AddItemStackables({"eyeturret_item"})
+	--高脚鸟蛋相关
+	AddAnimalStackables({"tallbirdegg_cracked","tallbirdegg"})
+	--岩浆虫卵相关
+	AddAnimalStackables({"lavae_egg","lavae_egg_cracked","lavae_tooth","lavae_cocoon"})
+	--暗影心房
+	AddItemStackables({"shadowheart"})
+	--犀牛角
+	AddItemStackables({"minotaurhorn"})
 end
