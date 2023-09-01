@@ -13,6 +13,18 @@ It makes almost everything pick quickly.
 
 ## Changelog
 
+**Version 1.10.0**
+- Add quick pick for Meat Bulb
+
+**Version 1.9.0**
+- Add quick pick for Fig
+
+**Version 1.8.0**
+- Bugfix
+
+**Version 1.7.0**
+- Bugfix
+
 **Version 1.6.0**
 
 - Add quick pick for Banana bushes and monkeytails
